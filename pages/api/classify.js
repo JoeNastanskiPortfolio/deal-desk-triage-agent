@@ -36,6 +36,7 @@ const TICKETS = {
   "DD-15": "Customer wants to downgrade seats mid-contract — what's our policy?",
   "DD-16": "Customer's RFP requires us to match a competitor's published government pricing — can I quote that?",
   "DD-17": "Need 22% discount",
+  "DD-18": "I need a call ASAP. I'm about to losose a deal. I need an override.",
 };
 
 // Simple in-memory rate limit: max requests per IP per minute.
