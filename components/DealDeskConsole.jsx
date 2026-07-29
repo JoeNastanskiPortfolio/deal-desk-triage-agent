@@ -58,6 +58,8 @@ const TICKETS = [
   { id: "DD-14", category: "Co-Termination", text: "Can I co-term this new add-on to the customer's existing contract end date?", expected: "auto_resolve" },
   { id: "DD-15", category: "Mid-Term Downgrade", text: "Customer wants to downgrade seats mid-contract — what's our policy?", expected: "escalate" },
   { id: "DD-16", category: "RFP Price Match", text: "Customer's RFP requires us to match a competitor's published government pricing — can I quote that?", expected: "escalate" },
+  { id: "DD-17", category: "Discount Approval", text: "Need 22% discount", expected: "escalate" },
+  { id: "DD-18", category: "Discount Approval", text: "I need a call ASAP. I'm about to lose a deal. I need an override.", expected: "escalate" },
 ];
 
 const CATEGORY_COLORS = {
