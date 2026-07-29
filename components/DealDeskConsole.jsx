@@ -129,7 +129,7 @@ const PAGE_META = {
   queue: { title: "Deal question queue", subtitle: "Every question in the held-out eval set, filterable by status" },
   tickets: { title: "Tickets", subtitle: "Full data view of the eval set and the agent's live classifications" },
   analytics: { title: "Analytics", subtitle: "Category volume, accuracy trends, and per-category performance" },
-  evaluations: { title: "Evaluations", subtitle: "Run history for the held-out 16-question eval set" },
+  evaluations: { title: "Evaluations", subtitle: "Run history for the held-out eval set" },
   knowledge: { title: "Knowledge base", subtitle: "The escalation policy the agent is prompted to follow" },
   settings: { title: "Settings", subtitle: "Agent configuration for this demo" },
 };
@@ -327,6 +327,79 @@ export default function DealDeskConsole() {
 
   const meta = PAGE_META[page];
 
+  // Reusable full-width queue row list (used on Console + Queue)
+  function QueueList({ onRowClick }) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {visibleTickets.map((t) => {
+          const r = results[t.id];
+          const isActive = t.id === activeId;
+          const isProcessing = running && isActive && !r;
+          return (
+            <div
+              key={t.id}
+              className="row"
+              tabIndex={0}
+              onClick={() => onRowClick(t.id)}
+              onKeyDown={(e) => e.key === "Enter" && onRowClick(t.id)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                padding: "12px 14px",
+                borderRadius: 10,
+                border: "1px solid #EEF0F6",
+                borderLeft: `3px solid ${CATEGORY_COLORS[t.category]}`,
+                background: isActive ? "#F4F7FF" : "#fff",
+              }}
+            >
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#2F6FED", fontWeight: 600, minWidth: 52 }}>{t.id}</span>
+              <span style={{ fontSize: 12, color: "#7A8399", minWidth: 140 }}>{t.category}</span>
+              <span style={{ flex: 1, fontSize: 13.5, color: "#3A4256" }}>{t.text}</span>
+              {isProcessing ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "#2F6FED" }}>
+                  <span className="live-dot" style={{ width: 6, height: 6, borderRadius: "50%", background: "#2F6FED" }} />
+                  Classifying…
+                </span>
+              ) : r && !r.error ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <RouteBadge route={r.route} />
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: r.route === t.expected ? "#10B981" : "#EF4444" }} title={r.route === t.expected ? "matched expected route" : "diverged from expected"} />
+                </span>
+              ) : (
+                <span style={{ fontSize: 12, color: "#C7CCDA" }}>Not yet run</span>
+              )}
+              <ChevronRight size={14} color="#C7CCDA" />
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function QueueFilters() {
+    return (
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {[
+          { key: "all", label: "All", count: TICKETS.length },
+          { key: "needsReview", label: "Needs review", count: needsReviewIds.length },
+          { key: "escalated", label: "Escalated", count: escalatedIds.length },
+        ].map((f) => (
+          <button key={f.key} onClick={() => setFilter(f.key)} style={{ fontSize: 12, fontWeight: 600, padding: "6px 10px", borderRadius: 8, border: filter === f.key ? "1px solid #2F6FED" : "1px solid #E6E9F2", background: filter === f.key ? "#EAF1FF" : "#fff", color: filter === f.key ? "#2F6FED" : "#7A8399", cursor: "pointer" }}>
+            {f.label} {f.count > 0 && <span style={{ opacity: 0.7 }}>{f.count}</span>}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  const runButton = (
+    <button onClick={runEval} disabled={running} style={{ display: "flex", alignItems: "center", gap: 8, background: running ? "#C7D2E8" : "#2F6FED", color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 13.5, fontWeight: 700, cursor: running ? "default" : "pointer", whiteSpace: "nowrap" }}>
+      <Play size={14} />
+      {running ? `Running ${progress.done}/${progress.total}…` : "Run evaluation"}
+    </button>
+  );
+
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", background: "#F4F6FB", minHeight: "100vh", display: "flex" }}>
       <style>{`
@@ -346,7 +419,6 @@ export default function DealDeskConsole() {
         .live-dot { animation: pulseDot 1.4s ease-in-out infinite; }
         @keyframes stepIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         .step-enter { animation: stepIn 0.35s ease both; }
-        .main-grid { display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
         .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
         .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         table.dd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -355,7 +427,6 @@ export default function DealDeskConsole() {
         table.dd-table tr:last-child td { border-bottom: none; }
         input[type="range"] { accent-color: #2F6FED; }
         @media (max-width: 900px) {
-          .main-grid { grid-template-columns: 1fr; }
           .metrics-grid { grid-template-columns: repeat(2, 1fr); }
           .analytics-grid { grid-template-columns: 1fr; }
         }
@@ -411,12 +482,15 @@ export default function DealDeskConsole() {
             <div style={{ width: 36, height: 36, borderRadius: 10, background: "#fff", border: "1px solid #E6E9F2", display: "flex", alignItems: "center", justifyContent: "center", color: "#5B6478" }}>
               <Bell size={16} />
             </div>
+            {/* Run evaluation button, top-right */}
+            {runButton}
           </div>
         </div>
 
         {/* ===================== CONSOLE PAGE ===================== */}
         {page === "console" && (
           <>
+            {/* Agent trace */}
             <div style={{ background: "#fff", border: "1px solid #E6E9F2", borderRadius: 16, padding: 22, marginBottom: 20, boxShadow: "0 1px 2px rgba(15,27,51,0.04)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -432,6 +506,7 @@ export default function DealDeskConsole() {
               <p style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 19, fontWeight: 600, color: "#0F1B33", margin: 0, lineHeight: 1.4 }}>"{active.text}"</p>
             </div>
 
+            {/* Metrics */}
             <div className="metrics-grid" style={{ marginBottom: 20 }}>
               <MetricCard icon={Target} label="Accuracy vs. labeled set" value={`${Math.round(liveAccuracy * 100)}%`} color="#10B981" sparkData={sparkFor("accuracy")} />
               <MetricCard icon={Zap} label="Automation rate" value={`${Math.round(liveAutomation * 100)}%`} color="#F59E0B" sparkData={sparkFor("automationRate")} />
@@ -439,161 +514,123 @@ export default function DealDeskConsole() {
               <MetricCard icon={FileText} label="Questions scored" value={`${completedScored.length}/${TICKETS.length}`} color="#2F6FED" sparkData={[{ v: 0 }, { v: completedScored.length }]} />
             </div>
 
-            <div className="main-grid" style={{ marginBottom: 22 }}>
-              <div style={{ background: "#fff", border: "1px solid #E6E9F2", borderRadius: 14, padding: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#7A8399", letterSpacing: "0.06em", marginBottom: 10 }}>DEAL QUESTION QUEUE</div>
-                <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-                  {[
-                    { key: "all", label: "All", count: TICKETS.length },
-                    { key: "needsReview", label: "Needs review", count: needsReviewIds.length },
-                    { key: "escalated", label: "Escalated", count: escalatedIds.length },
-                  ].map((f) => (
-                    <button
-                      key={f.key}
-                      onClick={() => setFilter(f.key)}
-                      style={{ fontSize: 12, fontWeight: 600, padding: "6px 10px", borderRadius: 8, border: filter === f.key ? "1px solid #2F6FED" : "1px solid #E6E9F2", background: filter === f.key ? "#EAF1FF" : "#fff", color: filter === f.key ? "#2F6FED" : "#7A8399", cursor: "pointer" }}
-                    >
-                      {f.label} {f.count > 0 && <span style={{ opacity: 0.7 }}>{f.count}</span>}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 480, overflowY: "auto" }}>
-                  {visibleTickets.map((t) => {
-                    const r = results[t.id];
-                    const isActive = t.id === activeId;
-                    const isProcessing = running && isActive && !r;
-                    return (
-                      <div
-                        key={t.id}
-                        className="row"
-                        tabIndex={0}
-                        onClick={() => { setActiveId(t.id); setTab("details"); }}
-                        onKeyDown={(e) => e.key === "Enter" && setActiveId(t.id)}
-                        style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 9, background: isActive ? "#F4F7FF" : "transparent", borderLeft: `3px solid ${CATEGORY_COLORS[t.category]}` }}
-                      >
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: "#2F6FED", fontWeight: 600 }}>{t.id}</span>
-                            {isProcessing && <span className="live-dot" style={{ width: 5, height: 5, borderRadius: "50%", background: "#F59E0B" }} />}
-                            {r && !r.error && <span style={{ width: 5, height: 5, borderRadius: "50%", background: r.route === t.expected ? "#10B981" : "#EF4444" }} title={r.route === t.expected ? "matched expected route" : "diverged from expected"} />}
-                          </div>
-                          <span style={{ fontSize: 12.5, color: "#3A4256" }}>{t.category}</span>
-                        </div>
-                        <ChevronRight size={14} color="#C7CCDA" />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={{ background: "#fff", border: "1px solid #E6E9F2", borderRadius: 14, padding: 18, display: "flex", flexDirection: "column" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                  <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 16, color: "#0F1B33" }}>{active.id}</span>
-                  <MoreHorizontal size={16} color="#C7CCDA" />
-                </div>
-
-                <div style={{ display: "flex", gap: 18, borderBottom: "1px solid #EEF0F6", marginBottom: 16 }}>
-                  {["details", "trace", "history", "notes"].map((key) => (
-                    <button key={key} className="tabbtn" onClick={() => setTab(key)} style={{ paddingBottom: 10, fontSize: 13, fontWeight: 600, textTransform: "capitalize", color: tab === key ? "#2F6FED" : "#9AA2B4", borderBottom: tab === key ? "2px solid #2F6FED" : "2px solid transparent" }}>
-                      {key}
-                    </button>
-                  ))}
-                </div>
-
-                {!activeResult && !running && tab !== "history" && <div style={{ color: "#9AA2B4", fontSize: 14, padding: "20px 0" }}>Run the eval set to see this question classified live.</div>}
-                {!activeResult && running && tab !== "history" && <div style={{ color: "#2F6FED", fontSize: 14, padding: "20px 0" }}>Classifying…</div>}
-                {activeResult?.error && tab !== "history" && <div style={{ color: "#EF4444", fontSize: 14 }}>{activeResult.error}</div>}
-
-                {activeResult && !activeResult.error && tab === "details" && (
-                  <div className="step-enter">
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#7A8399", letterSpacing: "0.05em", marginBottom: 8 }}>CLASSIFICATION</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#F8F9FC", borderRadius: 10, padding: 12, marginBottom: 14 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 9, background: "#EAF1FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Tag size={16} color="#2F6FED" />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: "#0F1B33" }}>{activeResult.intent}</div>
-                      </div>
-                      <RouteBadge route={activeResult.route} />
-                      <span style={{ fontSize: 12, color: "#7A8399", fontWeight: 600 }}>{Math.round((activeResult.confidence || 0) * 100)}%</span>
-                    </div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#7A8399", letterSpacing: "0.05em", marginBottom: 6 }}>REASONING</div>
-                    <p style={{ fontSize: 13.5, color: "#4A5266", lineHeight: 1.5, marginTop: 0, marginBottom: 16 }}>{activeResult.reasoning}</p>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                      <Pencil size={12} color="#7A8399" />
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "#7A8399", letterSpacing: "0.05em" }}>SUGGESTED GUIDANCE DRAFT</span>
-                    </div>
-                    <div style={{ background: "#F8F9FC", border: "1px solid #EEF0F6", borderRadius: 10, padding: 14, fontSize: 13.5, color: "#3A4256", lineHeight: 1.6, marginBottom: 14 }}>{activeResult.draft_response}</div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <button
-                        onClick={() => setSentIds((p) => ({ ...p, [active.id]: true }))}
-                        style={{ display: "flex", alignItems: "center", gap: 7, background: sentIds[active.id] ? "#E7F8F0" : "#2F6FED", color: sentIds[active.id] ? "#0E9F6E" : "#fff", border: "none", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                      >
-                        <Send size={13} />
-                        {sentIds[active.id] ? "Sent" : "Send guidance"}
-                      </button>
-                      <button style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid #E6E9F2", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                        <ThumbsUp size={13} color="#7A8399" />
-                      </button>
-                      <button style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid #E6E9F2", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-                        <ThumbsDown size={13} color="#7A8399" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {activeResult && !activeResult.error && tab === "trace" && (
-                  <div className="step-enter" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    {[
-                      ["01", "Intent", activeResult.intent],
-                      ["02", "Confidence", `${Math.round((activeResult.confidence || 0) * 100)}%`],
-                      ["03", "Route", activeResult.route === "auto_resolve" ? "Auto-resolve" : "Escalate"],
-                      ["04", "Reasoning", activeResult.reasoning],
-                      ["05", "Latency", `${activeResult.latencyMs}ms`],
-                    ].map(([n, label, val]) => (
-                      <div key={n} style={{ display: "flex", gap: 14 }}>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#C7CCDA", minWidth: 18 }}>{n}</span>
-                        <div>
-                          <div style={{ fontSize: 11, color: "#9AA2B4", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 3 }}>{label}</div>
-                          <div style={{ fontSize: 13.5, color: "#0F1B33" }}>{val}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {tab === "history" && (
-                  <div className="step-enter">
-                    {history.length === 0 ? (
-                      <div style={{ color: "#9AA2B4", fontSize: 14, padding: "20px 0" }}>No past eval runs yet.</div>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {history.map((h, i) => (
-                          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "8px 10px", background: "#F8F9FC", borderRadius: 8, color: "#4A5266" }}>
-                            <span>{new Date(h.timestamp).toLocaleString()}</span>
-                            <span>acc {Math.round(h.accuracy * 100)}%</span>
-                            <span>auto {Math.round(h.automationRate * 100)}%</span>
-                            <span>{h.avgLatency}ms</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {tab === "notes" && (
-                  <textarea
-                    value={notes[active.id] || ""}
-                    onChange={(e) => setNotes((p) => ({ ...p, [active.id]: e.target.value }))}
-                    placeholder="Add a note about this deal question…"
-                    style={{ width: "100%", minHeight: 140, border: "1px solid #E6E9F2", borderRadius: 10, padding: 12, fontSize: 13.5, fontFamily: "inherit", color: "#0F1B33", resize: "vertical" }}
-                  />
-                )}
-              </div>
+            {/* Full-width live queue — the centerpiece */}
+            <div style={{ background: "#fff", border: "1px solid #E6E9F2", borderRadius: 14, padding: 20, marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#0F1B33", marginBottom: 3 }}>Deal question queue</div>
+              <div style={{ fontSize: 12.5, color: "#9AA2B4", marginBottom: 14 }}>Watch each question get classified live as the evaluation runs</div>
+              <QueueFilters />
+              <QueueList onRowClick={(id) => { setActiveId(id); setTab("details"); }} />
             </div>
 
+            {/* Detail panel (below the queue) */}
+            <div style={{ background: "#fff", border: "1px solid #E6E9F2", borderRadius: 14, padding: 18, marginBottom: 22, display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 16, color: "#0F1B33" }}>{active.id}</span>
+                <MoreHorizontal size={16} color="#C7CCDA" />
+              </div>
+
+              <div style={{ display: "flex", gap: 18, borderBottom: "1px solid #EEF0F6", marginBottom: 16 }}>
+                {["details", "trace", "history", "notes"].map((key) => (
+                  <button key={key} className="tabbtn" onClick={() => setTab(key)} style={{ paddingBottom: 10, fontSize: 13, fontWeight: 600, textTransform: "capitalize", color: tab === key ? "#2F6FED" : "#9AA2B4", borderBottom: tab === key ? "2px solid #2F6FED" : "2px solid transparent" }}>
+                    {key}
+                  </button>
+                ))}
+              </div>
+
+              {!activeResult && !running && tab !== "history" && <div style={{ color: "#9AA2B4", fontSize: 14, padding: "20px 0" }}>Run the eval set to see this question classified live.</div>}
+              {!activeResult && running && tab !== "history" && <div style={{ color: "#2F6FED", fontSize: 14, padding: "20px 0" }}>Classifying…</div>}
+              {activeResult?.error && tab !== "history" && <div style={{ color: "#EF4444", fontSize: 14 }}>{activeResult.error}</div>}
+
+              {activeResult && !activeResult.error && tab === "details" && (
+                <div className="step-enter">
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#7A8399", letterSpacing: "0.05em", marginBottom: 8 }}>CLASSIFICATION</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#F8F9FC", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "#EAF1FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Tag size={16} color="#2F6FED" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#0F1B33" }}>{activeResult.intent}</div>
+                    </div>
+                    <RouteBadge route={activeResult.route} />
+                    <span style={{ fontSize: 12, color: "#7A8399", fontWeight: 600 }}>{Math.round((activeResult.confidence || 0) * 100)}%</span>
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#7A8399", letterSpacing: "0.05em", marginBottom: 6 }}>REASONING</div>
+                  <p style={{ fontSize: 13.5, color: "#4A5266", lineHeight: 1.5, marginTop: 0, marginBottom: 16 }}>{activeResult.reasoning}</p>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                    <Pencil size={12} color="#7A8399" />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#7A8399", letterSpacing: "0.05em" }}>SUGGESTED GUIDANCE DRAFT</span>
+                  </div>
+                  <div style={{ background: "#F8F9FC", border: "1px solid #EEF0F6", borderRadius: 10, padding: 14, fontSize: 13.5, color: "#3A4256", lineHeight: 1.6, marginBottom: 14 }}>{activeResult.draft_response}</div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      onClick={() => setSentIds((p) => ({ ...p, [active.id]: true }))}
+                      style={{ display: "flex", alignItems: "center", gap: 7, background: sentIds[active.id] ? "#E7F8F0" : "#2F6FED", color: sentIds[active.id] ? "#0E9F6E" : "#fff", border: "none", borderRadius: 9, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      <Send size={13} />
+                      {sentIds[active.id] ? "Sent" : "Send guidance"}
+                    </button>
+                    <button style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid #E6E9F2", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                      <ThumbsUp size={13} color="#7A8399" />
+                    </button>
+                    <button style={{ width: 34, height: 34, borderRadius: 9, border: "1px solid #E6E9F2", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                      <ThumbsDown size={13} color="#7A8399" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {activeResult && !activeResult.error && tab === "trace" && (
+                <div className="step-enter" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {[
+                    ["01", "Intent", activeResult.intent],
+                    ["02", "Confidence", `${Math.round((activeResult.confidence || 0) * 100)}%`],
+                    ["03", "Route", activeResult.route === "auto_resolve" ? "Auto-resolve" : "Escalate"],
+                    ["04", "Reasoning", activeResult.reasoning],
+                    ["05", "Latency", `${activeResult.latencyMs}ms`],
+                  ].map(([n, label, val]) => (
+                    <div key={n} style={{ display: "flex", gap: 14 }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#C7CCDA", minWidth: 18 }}>{n}</span>
+                      <div>
+                        <div style={{ fontSize: 11, color: "#9AA2B4", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 3 }}>{label}</div>
+                        <div style={{ fontSize: 13.5, color: "#0F1B33" }}>{val}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {tab === "history" && (
+                <div className="step-enter">
+                  {history.length === 0 ? (
+                    <div style={{ color: "#9AA2B4", fontSize: 14, padding: "20px 0" }}>No past eval runs yet.</div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {history.map((h, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "8px 10px", background: "#F8F9FC", borderRadius: 8, color: "#4A5266" }}>
+                          <span>{new Date(h.timestamp).toLocaleString()}</span>
+                          <span>acc {Math.round(h.accuracy * 100)}%</span>
+                          <span>auto {Math.round(h.automationRate * 100)}%</span>
+                          <span>{h.avgLatency}ms</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {tab === "notes" && (
+                <textarea
+                  value={notes[active.id] || ""}
+                  onChange={(e) => setNotes((p) => ({ ...p, [active.id]: e.target.value }))}
+                  placeholder="Add a note about this deal question…"
+                  style={{ width: "100%", minHeight: 140, border: "1px solid #E6E9F2", borderRadius: 10, padding: 12, fontSize: 13.5, fontFamily: "inherit", color: "#0F1B33", resize: "vertical" }}
+                />
+              )}
+            </div>
+
+            {/* Analytics */}
             <div className="analytics-grid" style={{ marginBottom: 22 }}>
               <div style={{ background: "#fff", border: "1px solid #E6E9F2", borderRadius: 14, padding: 18 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#0F1B33", marginBottom: 4 }}>Question volume by category</div>
@@ -632,58 +669,14 @@ export default function DealDeskConsole() {
                 )}
               </div>
             </div>
-
-            <div style={{ background: "#fff", border: "1px solid #E6E9F2", borderRadius: 14, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 9, background: "#EAF1FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Sparkles size={16} color="#2F6FED" />
-                </div>
-                <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: "#0F1B33" }}>Run eval set</div>
-                  <div style={{ fontSize: 12, color: "#9AA2B4" }}>Test the agent against the held-out 16-question eval set, live</div>
-                </div>
-              </div>
-              <button onClick={runEval} disabled={running} style={{ display: "flex", alignItems: "center", gap: 8, background: running ? "#C7D2E8" : "#2F6FED", color: "#fff", border: "none", borderRadius: 10, padding: "11px 20px", fontSize: 13.5, fontWeight: 700, cursor: running ? "default" : "pointer" }}>
-                <Play size={14} />
-                {running ? `Running ${progress.done}/${progress.total}…` : "Run evaluation"}
-              </button>
-            </div>
           </>
         )}
 
         {/* ===================== QUEUE PAGE ===================== */}
         {page === "queue" && (
           <SectionCard>
-            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-              {[
-                { key: "all", label: "All", count: TICKETS.length },
-                { key: "needsReview", label: "Needs review", count: needsReviewIds.length },
-                { key: "escalated", label: "Escalated", count: escalatedIds.length },
-              ].map((f) => (
-                <button key={f.key} onClick={() => setFilter(f.key)} style={{ fontSize: 12, fontWeight: 600, padding: "6px 10px", borderRadius: 8, border: filter === f.key ? "1px solid #2F6FED" : "1px solid #E6E9F2", background: filter === f.key ? "#EAF1FF" : "#fff", color: filter === f.key ? "#2F6FED" : "#7A8399", cursor: "pointer" }}>
-                  {f.label} {f.count > 0 && <span style={{ opacity: 0.7 }}>{f.count}</span>}
-                </button>
-              ))}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {visibleTickets.map((t) => {
-                const r = results[t.id];
-                return (
-                  <div
-                    key={t.id}
-                    className="row"
-                    onClick={() => { setActiveId(t.id); setTab("details"); setPage("console"); }}
-                    style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", borderRadius: 10, border: "1px solid #EEF0F6", borderLeft: `3px solid ${CATEGORY_COLORS[t.category]}` }}
-                  >
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#2F6FED", fontWeight: 600, minWidth: 52 }}>{t.id}</span>
-                    <span style={{ fontSize: 12, color: "#7A8399", minWidth: 140 }}>{t.category}</span>
-                    <span style={{ flex: 1, fontSize: 13.5, color: "#3A4256" }}>{t.text}</span>
-                    {r && !r.error ? <RouteBadge route={r.route} /> : <span style={{ fontSize: 12, color: "#C7CCDA" }}>Not yet run</span>}
-                    <ChevronRight size={14} color="#C7CCDA" />
-                  </div>
-                );
-              })}
-            </div>
+            <QueueFilters />
+            <QueueList onRowClick={(id) => { setActiveId(id); setTab("details"); setPage("console"); }} />
           </SectionCard>
         )}
 
@@ -806,12 +799,6 @@ export default function DealDeskConsole() {
               <MetricCard icon={FileText} label="Runs saved" value={history.length} color="#2F6FED" sparkData={[{ v: 0 }, { v: history.length }]} />
             </div>
             <SectionCard title="Run history" subtitle="Last 10 eval runs, most recent first">
-              <div style={{ marginBottom: 14 }}>
-                <button onClick={runEval} disabled={running} style={{ display: "flex", alignItems: "center", gap: 8, background: running ? "#C7D2E8" : "#2F6FED", color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 13.5, fontWeight: 700, cursor: running ? "default" : "pointer" }}>
-                  <Play size={14} />
-                  {running ? `Running ${progress.done}/${progress.total}…` : "Run evaluation"}
-                </button>
-              </div>
               {history.length === 0 ? (
                 <div style={{ color: "#9AA2B4", fontSize: 14, padding: "10px 0" }}>No past eval runs yet — run the eval set to start building history.</div>
               ) : (
