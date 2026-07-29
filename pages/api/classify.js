@@ -35,6 +35,7 @@ const TICKETS = {
   "DD-14": "Can I co-term this new add-on to the customer's existing contract end date?",
   "DD-15": "Customer wants to downgrade seats mid-contract — what's our policy?",
   "DD-16": "Customer's RFP requires us to match a competitor's published government pricing — can I quote that?",
+  "DD-17": "Need 22% discount",
 };
 
 // Simple in-memory rate limit: max requests per IP per minute.
