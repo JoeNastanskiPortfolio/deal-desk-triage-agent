@@ -1,3 +1,7 @@
+Deal desks field a constant stream of questions from sales reps — discount approvals, payment term exceptions, contract redlines, security reviews. Many are routine policy lookups a rep could self-serve; others carry real financial, legal, or compliance risk and need a human. This project is an AI agent that reads each incoming question and makes that call: auto-resolve with a drafted answer, or escalate to deal desk, finance, or legal. It runs on a system prompt that encodes the escalation policy in plain language, so the business logic is readable and editable by anyone on the team, not buried in code.
+
+What makes it more than a chatbot is the evaluation layer. The agent is scored against a held-out set of 16 labeled questions where the correct routing is known in advance. Every run reports accuracy against those labels, automation rate, average confidence, and per-category performance — so the agent's quality is a measured number, not a guess, and any change to the prompt can be tested against ground truth before it ships. Built with Next.js and the Anthropic API, with the API key held server-side and the endpoint locked to a fixed question set so it can't be abused.
+
 # Deal Desk Triage Agent
 
 A live agent that classifies sales-exec deal questions as auto-resolve or escalate,
