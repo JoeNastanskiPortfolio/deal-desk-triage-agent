@@ -56,7 +56,7 @@ const TICKETS = [
   { id: "DD-12", category: "Free Trial", text: "Can I extend this customer's trial another 30 days past the standard 14?", expected: "auto_resolve" },
   { id: "DD-13", category: "Security Review", text: "Customer's security questionnaire is blocking close — can we skip it given the deal size?", expected: "escalate" },
   { id: "DD-14", category: "Co-Termination", text: "Can I co-term this new add-on to the customer's existing contract end date?", expected: "auto_resolve" },
-  { id: "DD-15", category: "Mid-Term Downgrade", text: "Customer wants to downgrade seats mid-contract — what's our policy?", expected: "escalate" },
+  { id: "DD-15", category: "Mid-Term Downgrade", text: "Customer wants to downgrade seats mid-contract — what's our policy?", expected: "auto_resolve" },
   { id: "DD-16", category: "RFP Price Match", text: "Customer's RFP requires us to match a competitor's published government pricing — can I quote that?", expected: "escalate" },
   { id: "DD-17", category: "Discount Approval", text: "Need 22% discount", expected: "escalate" },
   { id: "DD-18", category: "Discount Approval", text: "I need a call ASAP. I'm about to lose a deal. I need an override.", expected: "escalate" },
